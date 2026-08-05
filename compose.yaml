@@ -2,14 +2,85 @@ volumes:
   msjava-db-data:
     driver: local
     name: msjava-db-data
+  msjava-broker-data:
+    driver: local
+    name: msjava-broker-data
 
 services:
+  msjava-user:
+    container_name: msjava-user
+    build:
+      context: ./user
+      dockerfile: ../.docker/dev/Dockerfile
+    depends_on:
+      msjava-broker:
+        condition: service_healthy
+      msjava-db:
+        condition: service_healthy
+    env_file:
+      - ./user/.env.example
+      - path: ./user/.env
+        required: false
+    ports:
+      - ${USER_SERVICE_PORT:-8081}:8081
+      - ${USER_SERVICE_DEBUG_PORT:-5005}:5005
+    develop:
+      watch:
+        - action: sync+restart
+          path: ./user/src
+          target: /app/src
+        - action: rebuild
+          path: ./user/pom.xml
+
+  msjava-email:
+    container_name: msjava-email
+    build:
+      context: ./email
+      dockerfile: ../.docker/dev/Dockerfile
+    depends_on:
+      msjava-broker:
+        condition: service_healthy
+      msjava-db:
+        condition: service_healthy
+    env_file:
+      - ./email/.env.example
+      - path: ./email/.env
+        required: false
+    ports:
+      - ${EMAIL_SERVICE_PORT:-8082}:8082
+      - ${EMAIL_SERVICE_DEBUG_PORT:-5006}:5005
+    develop:
+      watch:
+        - action: sync+restart
+          path: ./email/src
+          target: /app/src
+        - action: rebuild
+          path: ./email/pom.xml
+
+  msjava-broker:
+    container_name: msjava-broker
+    image: rabbitmq:4.3.4-management-alpine
+    restart: always
+    healthcheck:
+      test: ['CMD', 'rabbitmq-diagnostics', '-q', 'ping']
+      interval: 5s
+      timeout: 5s
+      retries: 10
+    ports:
+      - ${RABBITMQ_PORT:-5672}:5672
+      - ${RABBITMQ_MANAGEMENT_PORT:-15672}:15672
+    environment:
+      RABBITMQ_DEFAULT_USER: ${RABBITMQ_USER:-admin}
+      RABBITMQ_DEFAULT_PASS: ${RABBITMQ_PASSWORD:-123456}
+    volumes:
+      - msjava-broker-data:/var/lib/rabbitmq
+
   msjava-db:
     container_name: msjava-db
     image: postgres:18.4-alpine3.24
     restart: always
     healthcheck:
-      test: ['CMD-SHELL', 'pg_isready -U ${DB_USERNAME:-admin} -d ${DB_DATABASE:-postgres}']
+      test: ['CMD-SHELL', 'pg_isready -U ${DB_USER:-admin} -d ${DB_NAME:-postgres}']
       interval: 1s
       timeout: 5s
       retries: 10
@@ -21,4 +92,4 @@ services:
       - msjava-db-data:/var/lib/postgresql
       - ./.docker/dev/init.sql:/docker-entrypoint-initdb.d/init.sql
     ports:
-      - ${DB_PORT:-5432}:${DB_PORT:-5432}
+      - ${DB_PORT:-5432}:5432
