@@ -1,0 +1,24 @@
+volumes:
+  msjava-db-data:
+    driver: local
+    name: msjava-db-data
+
+services:
+  msjava-db:
+    container_name: msjava-db
+    image: postgres:18.4-alpine3.24
+    restart: always
+    healthcheck:
+      test: ['CMD-SHELL', 'pg_isready -U ${DB_USERNAME:-admin} -d ${DB_DATABASE:-postgres}']
+      interval: 1s
+      timeout: 5s
+      retries: 10
+    environment:
+      POSTGRES_DB: ${DB_NAME:-postgres}
+      POSTGRES_USER: ${DB_USER:-admin}
+      POSTGRES_PASSWORD: ${DB_PASSWORD:-123456}
+    volumes:
+      - msjava-db-data:/var/lib/postgresql
+      - ./.docker/dev/init.sql:/docker-entrypoint-initdb.d/init.sql
+    ports:
+      - ${DB_PORT:-5432}:${DB_PORT:-5432}
