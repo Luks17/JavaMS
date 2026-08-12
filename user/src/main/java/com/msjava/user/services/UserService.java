@@ -7,21 +7,31 @@ import org.springframework.data.domain.Page;
 import org.springframework.data.domain.Pageable;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
+import org.springframework.transaction.event.TransactionPhase;
+import org.springframework.transaction.event.TransactionalEventListener;
 
 import com.msjava.user.models.UserModel;
+import com.msjava.user.producers.UserProducer;
 import com.msjava.user.repositories.UserRepository;
 
 @Service
 public class UserService {
     private final UserRepository userRepository;
+    private final UserProducer userProducer;
 
-    public UserService(UserRepository userRepository) {
+    public UserService(
+            UserRepository userRepository,
+            UserProducer userProducer) {
         this.userRepository = userRepository;
+        this.userProducer = userProducer;
     }
 
     @Transactional
     public UserModel save(UserModel userModel) {
-        return this.userRepository.save(userModel);
+        userModel = this.userRepository.saveAndFlush(userModel);
+        this.userProducer.sendEmail(userModel);
+
+        return userModel;
     }
 
     public Page<UserModel> findAll(Pageable pageable) {
